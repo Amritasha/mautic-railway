@@ -2,11 +2,29 @@
 # Patched Mautic web entrypoint: install headlessly from env on first boot,
 # otherwise run migrations, then start Apache. Replaces the stock script that
 # only installs under DOCKER_MAUTIC_LOAD_TEST_DATA.
+#
+# "Installed" is detected by looking for a core Mautic table in the database,
+# NOT by local.php — local.php is regenerated (without site_url) on every boot
+# when config is not on a persistent volume, so it cannot be the signal.
 source /startup/logger.sh
 
-# "Installed" is determined by site_url being present in local.php (db_driver is
-# always set by the template, so it can't be the signal).
-if php -r "include('${MAUTIC_VOLUME_CONFIG}/local.php'); exit(!empty(\$parameters['site_url']) ? 0 : 1);"; then
+INSTALLED=$(php -r '
+try {
+  $host = getenv("MAUTIC_DB_HOST");
+  $port = getenv("MAUTIC_DB_PORT") ?: 3306;
+  $db   = getenv("MAUTIC_DB_DATABASE");
+  $user = getenv("MAUTIC_DB_USER");
+  $pass = getenv("MAUTIC_DB_PASSWORD");
+  $pdo  = new PDO("mysql:host={$host};port={$port};dbname={$db}", $user, $pass,
+                  [PDO::ATTR_TIMEOUT => 5]);
+  $pdo->query("SELECT 1 FROM users LIMIT 1");
+  echo "yes";
+} catch (Throwable $e) {
+  echo "no";
+}
+')
+
+if [ "$INSTALLED" = "yes" ]; then
   log "[${DOCKER_MAUTIC_ROLE}]: Mautic is already installed, running migrations..."
   su -s /bin/bash "$MAUTIC_WWW_USER" -c "php $MAUTIC_CONSOLE doctrine:migrations:migrate -n" || \
     log "[${DOCKER_MAUTIC_ROLE}]: migrations returned non-zero (continuing)."
