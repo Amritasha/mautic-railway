@@ -6,7 +6,7 @@
 #   2. The stock web entrypoint only installs Mautic when loading test data,
 #      otherwise it waits for the manual web wizard. We replace the web
 #      entrypoint with one that installs headlessly from env vars on first boot.
-FROM mautic/mautic:6.0.10-apache
+FROM mautic/mautic:7.2.2-apache
 
 USER root
 
