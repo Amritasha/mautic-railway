@@ -41,6 +41,16 @@ else
     || log "[${DOCKER_MAUTIC_ROLE}]: Install command returned non-zero (continuing)."
 fi
 
+# Normalize to a single Apache MPM at runtime. mod_php (php:*-apache base)
+# requires mpm_prefork; if the image also ships mpm_event/worker enabled, apache
+# fails with "More than one MPM loaded" or an "Invalid command 'MinSpareThreads'"
+# from a stray mpm_event.conf. Strip the others and keep prefork.
+if [ "${FLAVOUR}" = "apache" ]; then
+  rm -f /etc/apache2/mods-enabled/mpm_event.load  /etc/apache2/mods-enabled/mpm_event.conf \
+        /etc/apache2/mods-enabled/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.conf 2>/dev/null || true
+  a2enmod mpm_prefork >/dev/null 2>&1 || true
+fi
+
 if [ "${FLAVOUR}" = "apache" ]; then
   apache2-foreground
 elif [ "${FLAVOUR}" = "fpm" ]; then
